@@ -1,0 +1,35 @@
+name: Scheduled Retraining
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"    # every Monday 03:00 UTC
+  workflow_dispatch:         # allow manual trigger from GitHub UI
+
+jobs:
+  train-and-evaluate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install -r requirements.txt
+
+      - name: Pull latest data via DVC
+        run: |
+          pip install dvc[s3]
+          dvc pull
+
+      - name: Train model
+        run: python src/models/train.py --config configs/production.yaml
+
+      - name: Evaluate against baseline
+        id: eval
+        run: python src/models/evaluate.py --compare-to models/baseline_metrics.json
+
+      - name: Register model if improved
+        if: steps.eval.outputs.improved == 'true'
+        run: python src/models/register_model.py --stage staging
+```
